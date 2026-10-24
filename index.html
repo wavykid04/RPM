@@ -1,305 +1,137 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval'; img-src * data: blob:;">
   <link rel="stylesheet" href="style.css">
   <title>Spotify Widget</title>
 </head>
-
 <body>
 
-  <div class="widget-container" id="main-widget">
+  <div class="disc-wrapper" id="disc-wrapper">
+    <div class="disc-group" id="disc-group">
 
-    <div id="volume-popup-capsule" class="volume-popup-capsule">
-      <div id="custom-volume-container" class="custom-volume-container">
-        <div class="custom-volume-track"></div>
-        <div id="custom-volume-fill" class="custom-volume-fill"></div>
-        <div id="custom-volume-thumb" class="custom-volume-thumb"></div>
-      </div>
-    </div>
-
-    <div class="main-content">
-      <img id="album-art"
-        src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkAQMAAABpTeRvAAAABlBMVEUAAAD///+l2Z/dAAAAAXRSTlMAQObYZgAAABxJREFUeJztwQENAAAAwqD3P20ON6AAAAAAAADg1w1vAAABa9e6YAAAAABJRU5ErkJggg=="
-        alt="Album Art">
-
-      <div class="song-details">
-        <h1 id="track-title">Waiting for Media...</h1>
-        <h2 id="artist-name">Play a song!</h2>
-
-        <div class="progress-container">
-          <div id="progress-bar" style="width: 0%;"></div>
+      <!-- Spinning disc — controls must NOT be inside here -->
+      <div class="disc" id="disc">
+        <div class="vinyl-grooves"></div>
+        <div class="album-art-ring">
+          <img id="album-art"
+            src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkAQMAAABpTeRvAAAABlBMVEUAAAD///+l2Z/dAAAAAXRSTlMAQObYZgAAABxJREFUeJztwQENAAAAwqD3P20ON6AAAAAAAADg1w1vAAABa9e6YAAAAABJRU5ErkJggg=="
+            alt="Album Art">
         </div>
-
-        <div class="time-container">
-          <span id="current-time">0:00</span>
-          <span id="total-time">0:00</span>
-        </div>
-
-        <div class="controls-container">
-          <button class="control-btn" onclick="sendCommand('prev')">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-              <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
-            </svg>
-          </button>
-          <button id="play-pause-btn" class="control-btn play-btn" onclick="sendCommand('toggle')">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          </button>
-          <button class="control-btn" onclick="sendCommand('next')">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-              <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
-            </svg>
-          </button>
-          <button class="control-btn volume-btn" id="volume-btn" title="Adjust Volume">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-              <path
-                d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
-            </svg>
-          </button>
-          <button class="control-btn toggle-lyrics-btn" onclick="toggleLyrics()" title="Show Lyrics">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="white" id="chevron-icon">
-              <path d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z" />
-            </svg>
-          </button>
-        </div>
+        <div class="center-hole"></div>
       </div>
-    </div>
 
-    <div id="lyrics-drawer" class="lyrics-drawer">
-      <div id="live-lyrics-container">
-        <div id="lyrics-content"></div>
+      <!-- Controls: sibling of disc, so they don't spin; clipped by disc-group -->
+      <div class="controls-overlay" id="controls-overlay">
+        <button class="ctrl-btn" id="prev-btn" title="Previous">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+            <path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/>
+          </svg>
+        </button>
+        <button class="ctrl-btn" id="loop-btn" title="Loop">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 1l4 4-4 4M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 0 1-4 4H3"/>
+          </svg>
+        </button>
       </div>
-    </div>
 
+    </div>
   </div>
 
   <script>
     const { ipcRenderer } = require('electron');
 
-    let localProgress = 0, currentDuration = 1000, isPlaying = false, lastFrameTime = Date.now(), isLyricsOpen = false;
-    let currentTrackTitle = "", lastWindowsProgress = -1;
+    let isPlaying = false;
+    let isLooping = false;
+    let lastClickTime = 0;
+    let dragOrigin = null;
+    let hasDragged = false;
 
-    const playIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>';
-    const pauseIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+    const disc = document.getElementById('disc');
+    const discGroup = document.getElementById('disc-group');
+    const discWrapper = document.getElementById('disc-wrapper');
+    const loopBtn = document.getElementById('loop-btn');
 
-    function formatTime(ms) {
-      if (isNaN(ms) || ms <= 0) return "0:00";
-      const totalSeconds = Math.floor(ms / 1000), minutes = Math.floor(totalSeconds / 60), seconds = totalSeconds % 60;
-      return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    function setSpinning(playing) {
+      disc.classList.toggle('spinning', playing);
     }
 
-    function updateVisuals() {
-      document.getElementById('current-time').innerText = formatTime(localProgress);
-      document.getElementById('total-time').innerText = formatTime(currentDuration);
-      let percentage = (localProgress / currentDuration) * 100;
-      document.getElementById('progress-bar').style.width = Math.min(100, percentage) + '%';
+    // --- Circle hover detection ---
+    const HOVER_RADIUS = 82;
+    const DISC_RADIUS = 36; // collapsed disc is 72px wide
+
+    function isInsideDisc(e) {
+      const rect = discGroup.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const r = discWrapper.classList.contains('hovered') ? HOVER_RADIUS : DISC_RADIUS;
+      return (e.clientX - cx) ** 2 + (e.clientY - cy) ** 2 <= r * r;
     }
 
+    discWrapper.addEventListener('mousemove', (e) => {
+      const inside = isInsideDisc(e);
+      discWrapper.classList.toggle('hovered', inside);
+      ipcRenderer.send('set-ignore-mouse', !inside);
+    });
+    discWrapper.addEventListener('mouseleave', () => {
+      discWrapper.classList.remove('hovered');
+      ipcRenderer.send('set-ignore-mouse', true);
+    });
+
+    // --- JS drag ---
+    discWrapper.addEventListener('mousedown', (e) => {
+      const rect = discGroup.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const r = rect.width / 2;
+      if ((e.clientX - cx) ** 2 + (e.clientY - cy) ** 2 > r * r) return;
+      dragOrigin = { x: e.screenX, y: e.screenY };
+      hasDragged = false;
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!dragOrigin) return;
+      const dx = e.screenX - dragOrigin.x;
+      const dy = e.screenY - dragOrigin.y;
+      if (!hasDragged && Math.abs(dx) + Math.abs(dy) > 4) hasDragged = true;
+      if (hasDragged) { ipcRenderer.send('drag-window', { dx, dy }); dragOrigin = { x: e.screenX, y: e.screenY }; }
+    });
+    document.addEventListener('mouseup', () => {
+      if (!hasDragged && dragOrigin) {
+        const now = Date.now();
+        if (now - lastClickTime < 300) {
+          lastClickTime = 0;
+          ipcRenderer.send('media-command', 'next');
+          isPlaying = true; setSpinning(true);
+        } else {
+          lastClickTime = now;
+          ipcRenderer.send('media-command', 'toggle');
+          isPlaying = !isPlaying; setSpinning(isPlaying);
+        }
+      }
+      dragOrigin = null; hasDragged = false;
+    });
+
+    // --- Control buttons ---
+    document.getElementById('prev-btn').addEventListener('mousedown', e => e.stopPropagation());
+    document.getElementById('prev-btn').addEventListener('click', e => { e.stopPropagation(); ipcRenderer.send('media-command', 'prev'); });
+
+    loopBtn.addEventListener('mousedown', e => e.stopPropagation());
+    loopBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      isLooping = !isLooping;
+      loopBtn.querySelector('svg').style.stroke = isLooping ? '#1DB954' : 'white';
+      ipcRenderer.send('media-command', 'loop');
+    });
+
+    // --- Track updates ---
     ipcRenderer.on('update-track', (event, track) => {
       try {
-        document.getElementById('track-title').innerText = track.title;
-        document.getElementById('artist-name').innerText = track.artist;
         document.getElementById('album-art').src = track.albumArt;
-        document.getElementById('play-pause-btn').innerHTML = track.isPlaying ? pauseIcon : playIcon;
-        currentDuration = track.duration;
         isPlaying = track.isPlaying;
-
-        if (track.progress !== lastWindowsProgress || track.title !== currentTrackTitle) {
-          if (track.title !== currentTrackTitle || Math.abs(track.progress - localProgress) > 3000) {
-            localProgress = track.progress;
-            if (track.title !== currentTrackTitle && isLyricsOpen) setTimeout(() => fetchLyrics(), 500);
-            currentTrackTitle = track.title;
-          }
-          lastWindowsProgress = track.progress;
-        }
-      } catch (error) { console.error(error); }
+        setSpinning(isPlaying);
+      } catch (err) { console.error(err); }
     });
-
-    function animateProgressBar() {
-      const now = Date.now(), deltaTime = now - lastFrameTime;
-      lastFrameTime = now;
-      if (isPlaying && currentDuration > 0) {
-        localProgress = Math.min(currentDuration, localProgress + deltaTime);
-        updateVisuals();
-      } else if (!isPlaying) {
-        updateVisuals();
-      }
-      syncLyrics();
-      requestAnimationFrame(animateProgressBar);
-    }
-    animateProgressBar();
-
-    function sendCommand(cmd) {
-      ipcRenderer.send('media-command', cmd);
-      if (cmd === 'toggle') {
-        isPlaying = !isPlaying;
-        document.getElementById('play-pause-btn').innerHTML = isPlaying ? pauseIcon : playIcon;
-      }
-    }
-
-    // 7. FLAWLESS CUSTOM DRAG & CLICK CONTROLLER
-    const volumeBtn = document.getElementById('volume-btn');
-    const volumePopup = document.getElementById('volume-popup-capsule');
-    const volContainer = document.getElementById('custom-volume-container');
-    const volFill = document.getElementById('custom-volume-fill');
-    const volThumb = document.getElementById('custom-volume-thumb');
-
-    let isDrawerOpen = false;
-    let isDraggingVol = false;
-    let currentVol = 50;
-
-    // Block accidental UI closing
-    volumePopup.addEventListener('mousedown', (e) => e.stopPropagation());
-    volumePopup.addEventListener('click', (e) => e.stopPropagation());
-
-    // Update the visual height of the green bar and head
-    function setVolumeVisuals(percentage) {
-      currentVol = Math.max(0, Math.min(100, percentage));
-      volFill.style.height = `${currentVol}%`;
-      volThumb.style.bottom = `${currentVol}%`;
-    }
-
-    // Sync current PC volume on load
-    ipcRenderer.invoke('get-system-volume').then(vol => setVolumeVisuals(vol));
-
-    volumeBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      isDrawerOpen = !isDrawerOpen;
-      if (isDrawerOpen) {
-        ipcRenderer.invoke('get-system-volume').then(vol => setVolumeVisuals(vol));
-      }
-      volumePopup.classList.toggle('show-popup', isDrawerOpen);
-    });
-
-    document.addEventListener('click', (e) => {
-      if (isDrawerOpen && !volumePopup.contains(e.target) && e.target !== volumeBtn) {
-        isDrawerOpen = false;
-        volumePopup.classList.remove('show-popup');
-      }
-    });
-
-    // --- ABSOLUTE DRAG MATH ---
-    // Calculates exact mouse Y position relative to the container boundaries
-    function getVolFromMouse(clientY) {
-      const rect = volContainer.getBoundingClientRect();
-      const clickY = rect.bottom - clientY;
-      return (clickY / rect.height) * 100;
-    }
-
-    let volThrottle = false;
-    function dispatchVolume() {
-      if (volThrottle) return;
-      volThrottle = true;
-      ipcRenderer.send('change-volume', { value: Math.round(currentVol) });
-      setTimeout(() => { volThrottle = false; }, 40);
-    }
-
-    // 1. Click anywhere on the bar to instantly snap the volume
-    volContainer.addEventListener('mousedown', (e) => {
-      isDraggingVol = true;
-      setVolumeVisuals(getVolFromMouse(e.clientY));
-      dispatchVolume();
-    });
-
-    // 2. Drag the head (or anywhere vertically) smoothly
-    document.addEventListener('mousemove', (e) => {
-      if (!isDraggingVol) return;
-      setVolumeVisuals(getVolFromMouse(e.clientY));
-      dispatchVolume();
-    });
-
-    // 3. Lock in exact volume when you let go of the mouse
-    document.addEventListener('mouseup', () => {
-      if (isDraggingVol) {
-        isDraggingVol = false;
-        ipcRenderer.send('change-volume', { value: Math.round(currentVol) });
-      }
-    });
-
-    // 4. Scroll wheel functionality
-    let wheelThrottle = false;
-    volumePopup.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      if (wheelThrottle) return;
-      wheelThrottle = true;
-
-      const direction = e.deltaY < 0 ? 4 : -4;
-      setVolumeVisuals(currentVol + direction);
-      ipcRenderer.send('change-volume', { value: Math.round(currentVol) });
-
-      setTimeout(() => { wheelThrottle = false; }, 40);
-    });
-
-    // --- LYRICS HANDLING ENGINE CODE ---
-    let currentLyrics = [], activeLyricIndex = -1, loadedTrackId = "";
-    function toggleLyrics() {
-      const drawer = document.getElementById('lyrics-drawer'), btn = document.querySelector('.toggle-lyrics-btn');
-      isLyricsOpen = !isLyricsOpen;
-      ipcRenderer.send('toggle-lyrics-window', isLyricsOpen);
-      if (isLyricsOpen) {
-        drawer.classList.add('expanded'); btn.classList.add('open');
-        if (loadedTrackId !== currentTrackTitle) fetchLyrics();
-      } else {
-        drawer.classList.remove('expanded'); btn.classList.remove('open');
-      }
-    }
-    async function fetchLyrics() {
-      const title = document.getElementById('track-title').innerText, artist = document.getElementById('artist-name').innerText;
-      if (title === "Waiting for Media...") return;
-      const contentDiv = document.getElementById('lyrics-content');
-      contentDiv.innerHTML = '<p class="lyric-line active">Searching for lyrics...</p>';
-      contentDiv.style.transform = `translateY(0px)`;
-      try {
-        const url = `https://lrclib.net/api/get?track_name=${encodeURIComponent(title)}&artist_name=${encodeURIComponent(artist)}`;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("Not found");
-        const data = await response.json();
-        if (data && data.syncedLyrics) { parseLyrics(data.syncedLyrics); loadedTrackId = currentTrackTitle; }
-        else { contentDiv.innerHTML = '<p class="lyric-line active">No synced lyrics available</p>'; currentLyrics = []; }
-      } catch (err) { contentDiv.innerHTML = '<p class="lyric-line active">No lyrics found 😔</p>'; currentLyrics = []; }
-    }
-    function parseLyrics(lrcString) {
-      const lines = lrcString.split('\n'); currentLyrics = []; const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/;
-      lines.forEach(line => {
-        const match = timeRegex.exec(line);
-        if (match) {
-          const minutes = parseInt(match[1]), seconds = parseInt(match[2]); let ms = parseInt(match[3]);
-          if (match[3].length === 2) ms *= 10;
-          currentLyrics.push({ time: (minutes * 60 * 1000) + (seconds * 1000) + ms, text: line.replace(timeRegex, '').trim() });
-        }
-      });
-      renderLyrics();
-    }
-    function renderLyrics() {
-      const contentDiv = document.getElementById('lyrics-content'); contentDiv.innerHTML = '';
-      currentLyrics.forEach((lyric, index) => {
-        const p = document.createElement('p'); p.className = 'lyric-line'; p.id = `lyric-${index}`; p.innerText = lyric.text; contentDiv.appendChild(p);
-      });
-      activeLyricIndex = -1;
-    }
-    function syncLyrics() {
-      if (!isLyricsOpen || currentLyrics.length === 0) return;
-      let newActiveIndex = -1;
-      for (let i = 0; i < currentLyrics.length; i++) {
-        if (localProgress >= currentLyrics[i].time) newActiveIndex = i; else break;
-      }
-      if (newActiveIndex !== activeLyricIndex && newActiveIndex !== -1) {
-        if (activeLyricIndex !== -1) { const oldEl = document.getElementById(`lyric-${activeLyricIndex}`); if (oldEl) oldEl.classList.remove('active'); }
-        const newEl = document.getElementById(`lyric-${newActiveIndex}`);
-        if (newEl) {
-          newEl.classList.add('active');
-          const containerHeight = document.getElementById('live-lyrics-container').clientHeight;
-          const offset = newEl.offsetTop - (containerHeight / 2) + (newEl.clientHeight / 2);
-          document.getElementById('lyrics-content').style.transform = `translateY(-${Math.max(0, offset)}px)`;
-        }
-        activeLyricIndex = newActiveIndex;
-      }
-    }
   </script>
 </body>
-
 </html>

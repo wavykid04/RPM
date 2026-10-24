@@ -34,5 +34,8 @@
   "win": {
     "target": "nsis",
     "icon": "installer-icon.png"
+  },
+  "allowScripts": {
+    "electron@28.3.3": true
   }
 }
