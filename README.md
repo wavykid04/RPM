@@ -54,17 +54,22 @@ or if you don't want a terminal window hanging around, just double-click **`laun
 
 ## optional: Spotify like button
 
-if you want to save/unsave tracks without opening Spotify:
+totally optional but cool — lets you save/unsave tracks right from the widget.
 
-1. go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) and make an app
-2. add `http://localhost:8888/callback` as a Redirect URI
-3. paste your Client ID into `config.json`:
+**getting your Client ID:**
+
+1. go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) and log in with your Spotify account
+2. click **Create app**, give it any name/description, and set the Redirect URI to `http://localhost:8888/callback`
+3. once created, you'll see your **Client ID** on the app page — copy it
+4. paste it into `config.json` in the project folder:
 
 ```json
 {
-  "spotifyClientId": "YOUR_CLIENT_ID_HERE"
+  "spotifyClientId": "paste-your-id-here"
 }
 ```
+
+5. next time you launch the widget it'll ask you to log in once via browser, and you're good
 
 no Client ID? no problem — the widget still works fine, it just won't have the like button.
 
